@@ -107,7 +107,8 @@ public final class HelioDeviceProfileManager {
 
     public static boolean isBigCoreProfileSelected(Context context, SharedPreferences preferences) {
         if (isProfileEnabled(context, preferences)) {
-            return PROFILE_PERFORMANCE.equals(getSelectedProfile(preferences));
+            String profile = getSelectedProfile(preferences);
+            return PROFILE_PERFORMANCE.equals(profile) || PROFILE_ADAPTIVE.equals(profile);
         }
         return preferences != null && preferences.getBoolean(
                 PerformanceManager.PREF_PREFER_BIG_CORES, false);
@@ -179,7 +180,7 @@ public final class HelioDeviceProfileManager {
         if (PROFILE_BALANCED.equals(profile)) {
             return "Uses Android's normal core scheduling without forced core affinity or sustained-performance requests. Recommended as a general baseline.";
         }
-        return "Requests Android sustained-performance mode where supported and keeps the guest process on the normal scheduler for steadier long sessions.";
+        return "Requests Android sustained-performance mode where supported and avoids forced big-core affinity for steadier long sessions. Guest-thread priority still follows its separate checkbox.";
     }
 
     public static String getThermalStatusLabel(Context context) {
