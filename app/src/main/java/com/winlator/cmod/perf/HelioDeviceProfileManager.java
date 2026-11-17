@@ -124,6 +124,7 @@ public final class HelioDeviceProfileManager {
      * reapplies them after the Android thermal status recovers.
      */
     public static boolean shouldBoostGuestThreads(Context context, SharedPreferences preferences) {
+        if (!isProfileEnabled(context, preferences)) return true;
         if (PROFILE_ADAPTIVE.equals(getSelectedProfile(preferences))
                 && isSevereThermalPressure(context)) {
             return false;
