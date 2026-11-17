@@ -755,9 +755,43 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:text="Uses Android-supported sustained mode and existing guest-thread affinity controls. It does not unlock clocks, disable thermal protection, or guarantee a fixed FPS."
+                            android:text="Thermal protection remains enabled. Runtime controls use Android APIs and process-level scheduling only; they do not unlock clocks or voltage."
                             android:textColor="?android:attr/textColorSecondary"
                             android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/BTHelioApplyRecommended"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Apply Helio G99 recommended preset"
+                            android:textAllCaps="false" />
+
+                        <Button
+                            android:id="@+id/BTHelioRefreshDiagnostics"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Refresh device diagnostics"
+                            android:textAllCaps="false" />
+
+                        <TextView
+                            android:id="@+id/TVHelioDeviceDiagnostics"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Hardware diagnostics"
+                            android:textColor="?attr/semanticOnSurface"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/TVHelioRecommendedSettings"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="Recommended settings"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="11sp" />
+
                     </LinearLayout>
 
                     <!-- System Performance Enhancements -->
