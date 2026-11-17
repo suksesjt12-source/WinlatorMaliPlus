@@ -45,8 +45,9 @@ public class CpuTopology {
 
         List<Integer> bigCores = new ArrayList<>();
         if (maxFreq > 0) {
-            // Include cores matching the highest max frequency or within 10% of max
-            int threshold = (int) (maxFreq * 0.90f);
+            // Use a tighter threshold to separate G99/G100 high-frequency cores
+            // from the lower cluster (commonly ~2.2 GHz vs ~2.0 GHz).
+            int threshold = (int) (maxFreq * 0.95f);
             for (int i = 0; i < count; i++) {
                 if (maxFreqs[i] >= threshold) {
                     bigCores.add(i);
@@ -55,7 +56,9 @@ public class CpuTopology {
         }
 
         // Do not guess cluster ordering. If sysfs does not expose frequencies,
-        // skip affinity pinning and let Android's scheduler manage all cores.
+        // or every core appears to have the same maximum frequency, skip affinity
+        // pinning and let Android's scheduler manage all cores.
+        if (bigCores.size() == count) bigCores.clear();
         Log.d(TAG, "Detected Big Cores: " + bigCores + " (maxFreq=" + maxFreq + " MHz)");
         return bigCores;
     }
