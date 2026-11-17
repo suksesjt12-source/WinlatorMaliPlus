@@ -59,9 +59,7 @@ public class PerformanceManager {
                 HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
 
         // 3. Thread Priority Boost
-        if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && guestRootPid > 0) {
-            PerfPriority.boost(guestRootPid);
-        }
+        applyGuestThreadPriority(activity, prefs, guestRootPid);
 
         // 5. Samsung Galaxy Performance SDK Boost
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
@@ -88,9 +86,7 @@ public class PerformanceManager {
         setSustainedPerformance(activity,
                 HelioDeviceProfileManager.shouldUseSustainedPerformance(activity, prefs));
 
-        if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true) && currentGuestPid > 0) {
-            PerfPriority.boost(currentGuestPid);
-        }
+        applyGuestThreadPriority(activity, prefs, currentGuestPid);
 
         if (prefs.getBoolean(PREF_SAMSUNG_PERF_BOOST, true) && samsungDriver != null && samsungDriver.isSupported()) {
             samsungDriver.startBoost();
@@ -104,6 +100,7 @@ public class PerformanceManager {
         if (activity == null) return;
         unregisterThermalStatusListener();
         restoreGuestAffinity(currentGuestPid);
+        PerfPriority.restore();
         GameModeSignal.exitGameplay(activity);
         setSustainedPerformance(activity, false);
         if (samsungDriver != null && samsungDriver.isSupported()) {
@@ -158,12 +155,7 @@ public class PerformanceManager {
             RootPerformanceManager.restore(activity, null);
         }
 
-        if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true)) {
-            if (currentGuestPid > 0) PerfPriority.boost(currentGuestPid);
-        } else {
-            PerfPriority.restore();
-        }
-
+        applyGuestThreadPriority(activity, prefs, currentGuestPid);
         applyGuestAffinity(activity, prefs, currentGuestPid);
 
         if (samsungDriver != null && samsungDriver.isSupported()) {
@@ -180,15 +172,24 @@ public class PerformanceManager {
         currentGuestPid = pid;
         if (activity != null && isSessionActive) {
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
-            if (prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true)) {
-                PerfPriority.boost(pid);
-            }
+            applyGuestThreadPriority(activity, prefs, pid);
             applyGuestAffinity(activity, prefs, pid);
         }
     }
 
     public static boolean isSamsungSupported() {
         return samsungDriver != null && samsungDriver.isSupported();
+    }
+
+    private static void applyGuestThreadPriority(Activity activity,
+            SharedPreferences prefs, int pid) {
+        if (activity == null || prefs == null || pid <= 0) return;
+        boolean requested = prefs.getBoolean(PREF_THREAD_PRIORITY_BOOST, true);
+        if (requested && HelioDeviceProfileManager.shouldBoostGuestThreads(activity, prefs)) {
+            PerfPriority.boost(pid);
+        } else {
+            PerfPriority.restore();
+        }
     }
 
     private static void applyGuestAffinity(Activity activity, SharedPreferences prefs, int pid) {
@@ -217,6 +218,14 @@ public class PerformanceManager {
             PowerManager.OnThermalStatusChangedListener listener = status -> {
                 if (!isSessionActive || currentGuestPid <= 0) return;
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(activity);
+                if (status >= PowerManager.THERMAL_STATUS_SEVERE) {
+                    restoreGuestAffinity(currentGuestPid);
+                    PerfPriority.restore();
+                    Log.w(TAG, "Thermal guard restored guest affinity and thread priorities");
+                    return;
+                }
+
+                applyGuestThreadPriority(activity, prefs, currentGuestPid);
                 if (!HelioDeviceProfileManager.isBigCoreProfileSelected(activity, prefs)) {
                     restoreGuestAffinity(currentGuestPid);
                     return;

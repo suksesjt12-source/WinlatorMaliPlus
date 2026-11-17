@@ -19,6 +19,7 @@ public final class HelioDeviceProfileManager {
     public static final String PROFILE_STABLE = "stable";
     public static final String PROFILE_BALANCED = "balanced";
     public static final String PROFILE_PERFORMANCE = "performance";
+    public static final String PROFILE_ADAPTIVE = "adaptive_gaming";
 
     private HelioDeviceProfileManager() {}
 
@@ -92,7 +93,8 @@ public final class HelioDeviceProfileManager {
     public static String getSelectedProfile(SharedPreferences preferences) {
         String profile = preferences == null ? PROFILE_STABLE
                 : preferences.getString(PREF_PROFILE, PROFILE_STABLE);
-        if (PROFILE_BALANCED.equals(profile) || PROFILE_PERFORMANCE.equals(profile)) return profile;
+        if (PROFILE_BALANCED.equals(profile) || PROFILE_PERFORMANCE.equals(profile)
+                || PROFILE_ADAPTIVE.equals(profile)) return profile;
         return PROFILE_STABLE;
     }
 
@@ -105,7 +107,8 @@ public final class HelioDeviceProfileManager {
 
     public static boolean isBigCoreProfileSelected(Context context, SharedPreferences preferences) {
         if (isProfileEnabled(context, preferences)) {
-            return PROFILE_PERFORMANCE.equals(getSelectedProfile(preferences));
+            String profile = getSelectedProfile(preferences);
+            return PROFILE_PERFORMANCE.equals(profile) || PROFILE_ADAPTIVE.equals(profile);
         }
         return preferences != null && preferences.getBoolean(
                 PerformanceManager.PREF_PREFER_BIG_CORES, false);
@@ -114,6 +117,31 @@ public final class HelioDeviceProfileManager {
     public static boolean shouldPreferBigCores(Context context, SharedPreferences preferences) {
         boolean requested = isBigCoreProfileSelected(context, preferences);
         return requested && !isThermalPressure(context);
+    }
+
+    /**
+     * Adaptive Gaming backs off priority boosts at SEVERE thermal pressure and
+     * reapplies them after the Android thermal status recovers.
+     */
+    public static boolean shouldBoostGuestThreads(Context context, SharedPreferences preferences) {
+        if (!isProfileEnabled(context, preferences)) return true;
+        if (PROFILE_ADAPTIVE.equals(getSelectedProfile(preferences))
+                && isSevereThermalPressure(context)) {
+            return false;
+        }
+        return true;
+    }
+
+    /** True at Android's SEVERE thermal status or above; false when unavailable. */
+    public static boolean isSevereThermalPressure(Context context) {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
+        try {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            return pm != null && pm.getCurrentThermalStatus()
+                    >= PowerManager.THERMAL_STATUS_SEVERE;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** True at Android's MODERATE thermal status or above; false when unavailable. */
@@ -129,21 +157,31 @@ public final class HelioDeviceProfileManager {
     }
 
     public static String[] getProfileIds() {
-        return new String[] { PROFILE_STABLE, PROFILE_BALANCED, PROFILE_PERFORMANCE };
+        return new String[] {
+                PROFILE_STABLE, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_ADAPTIVE
+        };
     }
 
     public static String[] getProfileLabels() {
-        return new String[] { "Stable / sustained", "Balanced", "Performance / big cores" };
+        return new String[] {
+                "Stable / sustained",
+                "Balanced / all cores",
+                "Performance / detected big cores",
+                "Adaptive Gaming / thermal-aware"
+        };
     }
 
     public static String getProfileDescription(String profile) {
+        if (PROFILE_ADAPTIVE.equals(profile)) {
+            return "Enables detected big-core affinity only below Android MODERATE thermal status. At SEVERE status it restores the original guest-thread priorities, then reapplies the requested boost after recovery.";
+        }
         if (PROFILE_PERFORMANCE.equals(profile)) {
-            return "Uses the existing big-core affinity option for the guest process. This can help CPU-bound games but may increase heat and battery use.";
+            return "Pins the guest process tree to cores verified as the highest-frequency cluster while thermal status is below MODERATE. This can help CPU-bound games but may increase heat.";
         }
         if (PROFILE_BALANCED.equals(profile)) {
-            return "Keeps the standard Android Game Mode and guest-thread priority controls without requesting sustained mode or forcing big-core affinity.";
+            return "Uses Android's normal core scheduling without forced core affinity or sustained-performance requests. Recommended as a general baseline.";
         }
-        return "Requests Android sustained-performance mode where supported and avoids forcing emulation threads onto big cores. Intended for steadier longer sessions.";
+        return "Requests Android sustained-performance mode where supported and avoids forced big-core affinity for steadier long sessions. Guest-thread priority still follows its separate checkbox.";
     }
 
     public static String getThermalStatusLabel(Context context) {

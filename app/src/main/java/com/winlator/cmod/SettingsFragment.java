@@ -501,6 +501,62 @@ public class SettingsFragment extends Fragment {
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
         });
+        final TextView tvHelioDeviceDiagnostics =
+                view.findViewById(R.id.TVHelioDeviceDiagnostics);
+        final TextView tvHelioRecommendedSettings =
+                view.findViewById(R.id.TVHelioRecommendedSettings);
+        final Button btHelioApplyRecommended =
+                view.findViewById(R.id.BTHelioApplyRecommended);
+        final Button btHelioRefreshDiagnostics =
+                view.findViewById(R.id.BTHelioRefreshDiagnostics);
+
+        Runnable refreshHelioDiagnostics = () -> {
+            tvHelioThermal.setText(
+                    com.winlator.cmod.perf.HelioDeviceProfileManager
+                            .getBatteryTemperatureLabel(context)
+                    + "  ·  Thermal status: "
+                    + com.winlator.cmod.perf.HelioDeviceProfileManager
+                            .getThermalStatusLabel(context));
+            tvHelioDeviceDiagnostics.setText(
+                    com.winlator.cmod.perf.HelioTuningAdvisor
+                            .buildDiagnostics(context, helioInfo));
+        };
+        tvHelioRecommendedSettings.setText(
+                com.winlator.cmod.perf.HelioTuningAdvisor
+                        .buildRecommendations(helioInfo));
+        refreshHelioDiagnostics.run();
+
+        btHelioRefreshDiagnostics.setOnClickListener(v -> refreshHelioDiagnostics.run());
+        btHelioApplyRecommended.setEnabled(helioInfo.supported);
+        btHelioApplyRecommended.setOnClickListener(v -> {
+            if (!helioInfo.supported) {
+                AppUtils.showToast(context,
+                        "Helio G99/G100 was not confirmed by the system properties.");
+                return;
+            }
+            int adaptiveIndex = java.util.Arrays.asList(helioProfileIds).indexOf(
+                    com.winlator.cmod.perf.HelioDeviceProfileManager.PROFILE_ADAPTIVE);
+            if (adaptiveIndex >= 0) sHelioProfile.setSelection(adaptiveIndex);
+            boolean box64PerformanceFound = false;
+            for (int i = 0; i < sBox64Preset.getCount(); i++) {
+                Object item = sBox64Preset.getItemAtPosition(i);
+                if (item instanceof com.winlator.cmod.box64.Box64Preset
+                        && com.winlator.cmod.box64.Box64Preset.PERFORMANCE.equals(
+                        ((com.winlator.cmod.box64.Box64Preset) item).id)) {
+                    sBox64Preset.setSelection(i);
+                    box64PerformanceFound = true;
+                    break;
+                }
+            }
+            cbHelioProfileEnabled.setChecked(true);
+            if (cbGameModeSignal != null) cbGameModeSignal.setChecked(true);
+            if (cbThreadPriorityBoost != null) cbThreadPriorityBoost.setChecked(true);
+            if (cbSustainedPerformance != null) cbSustainedPerformance.setChecked(false);
+            AppUtils.showToast(context, box64PerformanceFound
+                    ? "Adaptive Gaming + Box64 Performance selected. Press Save Settings to apply."
+                    : "Adaptive Gaming selected; Box64 Performance preset was not found. Press Save Settings to apply.");
+        });
+
         deviceInfoHeader.setOnClickListener(header -> {
             boolean expanded = deviceInfoGrid.getVisibility() != View.VISIBLE;
             deviceInfoGrid.setVisibility(expanded ? View.VISIBLE : View.GONE);

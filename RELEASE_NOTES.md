@@ -1,6 +1,22 @@
 # Winlator Mali+ Local Integration Update
 
-This source update brings the local Winlator Mali+ integration forward with Vulkan and shortcut-library improvements while preserving the upstream EGL/Gladio and ZeroFG paths.
+## Helio G99/G100 tuning suite — 1.4.0
+
+- Added an Adaptive Gaming runtime profile for Helio G99/G100-class devices.
+- Added Android thermal-status handling: guest big-core affinity is released at MODERATE status; guest thread-priority boosts are restored at SEVERE status and can return after recovery.
+- Added device diagnostics for SoC/GPU identification, logical core count, readable high-frequency core cluster, RAM availability, battery temperature, and Android thermal status.
+- Added an apply action that selects the Adaptive Gaming Android profile, enables Game Mode and thread-priority boost, and selects Box64 Performance; the panel also documents Vortex, DXVK, resolution, frame-rate cap, VSync, and wrapper-memory starting values.
+- Removed the guessed upper-half CPU-core fallback. Big-core pinning is skipped unless the higher-frequency cluster can be identified from readable CPU frequency data.
+- Android thermal management remains enabled. No CPU/GPU voltage or frequency is forced, and no thermal limit is bypassed.
+
+## Validation scope
+
+- The Ludashi debug APK is compiled by the pull-request workflow.
+- Runtime behavior and actual game FPS still require physical-device testing on Helio G99/G100 hardware.
+
+---
+
+# This source update brings the local Winlator Mali+ integration forward with Vulkan and shortcut-library improvements while preserving the upstream EGL/Gladio and ZeroFG paths.
 
 ## Highlights
 
