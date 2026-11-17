@@ -54,13 +54,8 @@ public class CpuTopology {
             }
         }
 
-        // Fallback: If detection couldn't find distinct big cores, use upper half of cores
-        if (bigCores.isEmpty() && count > 1) {
-            for (int i = count / 2; i < count; i++) {
-                bigCores.add(i);
-            }
-        }
-
+        // Do not guess cluster ordering. If sysfs does not expose frequencies,
+        // skip affinity pinning and let Android's scheduler manage all cores.
         Log.d(TAG, "Detected Big Cores: " + bigCores + " (maxFreq=" + maxFreq + " MHz)");
         return bigCores;
     }
