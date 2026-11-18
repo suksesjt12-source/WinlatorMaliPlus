@@ -3141,8 +3141,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (!executablePath.startsWith(driveCPath)) return null;
 
             String relativePath = executablePath.substring(driveCPath.length())
-                    .replace(File.separatorChar, '\\\\');
-            String windowsPath = "C:\\\\" + relativePath;
+                    .replace(File.separatorChar, '\\');
+            String windowsPath = "C:\\" + relativePath;
 
             String execArgs = shortcut.getExtra("execArgs").trim();
             boolean gtaOpt = "1".equals(shortcut.getExtra("gtaOptimization", "0"))
