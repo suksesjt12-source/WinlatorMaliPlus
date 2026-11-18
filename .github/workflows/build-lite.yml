@@ -1,0 +1,47 @@
+name: Build Winlator Mali Lite APK
+
+on:
+  push:
+    branches: ["lite-optimization"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-lite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;35.0.0" "cmake;3.22.1" "ndk;29.0.14206865"
+
+      - name: Build Lite release APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleLiteRelease --no-daemon --stacktrace
+
+      - name: Upload Lite APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: winlator-mali-lite-arm64
+          path: app/build/outputs/apk/lite/release/*.apk
+          if-no-files-found: error
+          retention-days: 14

@@ -183,8 +183,25 @@ android {
             applicationId "com.futuremark.dmandroid.application"
             resValue "string", "app_name", "Winlator Mali+ Helio"
         }
+
+        lite {
+            dimension "version"
+            applicationId "com.winlator.mali.lite"
+            versionName "1.3.1-lite"
+            resValue "string", "app_name", "Winlator Mali Lite"
+        }
     }
 
+
+    // Ship the full assets only in the original flavors. Lite receives a curated subset.
+    sourceSets {
+        main { assets.srcDirs = [] }
+        standard { assets.srcDirs = ["src/main/assets"] }
+        ludashi { assets.srcDirs = ["src/main/assets"] }
+        antutu { assets.srcDirs = ["src/main/assets"] }
+        futuremark { assets.srcDirs = ["src/main/assets"] }
+        lite { assets.srcDirs = ["$buildDir/generated/liteAssets"] }
+    }
 
     ndkVersion '29.0.14206865'
 
@@ -203,6 +220,65 @@ android {
             pickFirsts += 'assets/dexopt/baseline.prof'
             pickFirsts += 'assets/dexopt/baseline.profm'
         }
+    }
+}
+
+/*
+ * The Lite flavor includes the common runtime plus a focused set of Mali/ARM64
+ * components. Legacy versions and Adreno-only archives stay available in the
+ * full flavors; compatible optional components can still be installed from
+ * the in-app catalogs or imported by the user.
+ */
+def liteAssetIncludes = [
+    "imagefs.tzst",
+    "container_pattern_common.tzst",
+    "common_dlls.json",
+    "box64_env_vars.json",
+    "fexcore_env_vars.json",
+    "gpu_cards.json",
+    "cursor.png",
+    "input_dlls.tzst",
+    "layers.tzst",
+    "libcdio.dll",
+    "wfm.exe",
+    "winhandler.exe",
+    "wine_debug_channels.json",
+    "wine_startmenu.json",
+    "box64/box64-0.4.3.tzst",
+    "wowbox64/wowbox64-0.4.3.tzst",
+    "fexcore/fexcore-2605.tzst",
+    "fexcore/fexcore-hybrid-x86.tzst",
+    "ddrawrapper/**",
+    "dxwrapper/d8vk-1.0.tzst",
+    "dxwrapper/dxvk-1.10.3-async.tzst",
+    "dxwrapper/dxvk-1.10.3.tzst",
+    "dxwrapper/dxvk-1.12.1-sarek.tzst",
+    "dxwrapper/dxvk-v2.3.1-stripped.tzst",
+    "dxwrapper/vkd3d-2.14.1.tzst",
+    "fonts/**",
+    "graphics_driver/extra_libs.tzst",
+    "graphics_driver/gladio-1.1.tzst",
+    "graphics_driver/leegao_bcn.tzst",
+    "graphics_driver/leegao_bcn_legacy.tzst",
+    "graphics_driver/wrapper*.tzst",
+    "inputcontrols/**",
+    "pulseaudio.tzst",
+    "pulseaudio-gamenative-*.tzst",
+    "soundfonts/**",
+    "wincomponents/**"
+]
+
+tasks.register("prepareLiteAssets", Sync) {
+    dependsOn(tasks.named("downloadAssets"))
+    from("src/main/assets") {
+        liteAssetIncludes.each { include(it) }
+    }
+    into("$buildDir/generated/liteAssets")
+}
+
+tasks.configureEach {
+    if (name.startsWith("mergeLite") && name.endsWith("Assets")) {
+        dependsOn(tasks.named("prepareLiteAssets"))
     }
 }
 
