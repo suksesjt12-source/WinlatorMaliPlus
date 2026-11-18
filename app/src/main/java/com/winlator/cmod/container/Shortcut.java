@@ -676,6 +676,15 @@ public class Shortcut {
         catch (JSONException e) {}
     }
 
+    public boolean isDirectBootEnabled() {
+        return "1".equals(getExtra("directBoot", "0"));
+    }
+
+    public void setDirectBootEnabled(boolean enabled) {
+        putExtra("directBoot", enabled ? "1" : null);
+        saveData();
+    }
+
     public String getSteamId() {
         return getExtra("steam_id");
     }
