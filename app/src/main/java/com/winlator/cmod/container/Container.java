@@ -405,6 +405,22 @@ public class Container {
         catch (JSONException e) {}
     }
 
+    /** Returns the per-container FPS cap. Zero means unlocked. */
+    public int getFpsLock() {
+        try {
+            int fps = Integer.parseInt(getExtra("fpsLock", "0"));
+            return fps == 30 || fps == 40 || fps == 45 || fps == 60 ? fps : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Stores only supported FPS caps; unsupported values safely fall back to unlocked. */
+    public void setFpsLock(int fps) {
+        if (fps != 30 && fps != 40 && fps != 45 && fps != 60) fps = 0;
+        putExtra("fpsLock", String.valueOf(fps));
+    }
+
     public String getWineVersion() {
         return wineVersion;
     }

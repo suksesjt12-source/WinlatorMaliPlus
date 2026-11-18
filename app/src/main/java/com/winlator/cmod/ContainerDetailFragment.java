@@ -346,6 +346,22 @@ public class ContainerDetailFragment extends Fragment {
 
         loadScreenSizeSpinner(view, isEditMode() ? container.getScreenSize() : Container.DEFAULT_SCREEN_SIZE);
 
+        final Spinner sFPSLock = view.findViewById(R.id.SFPSLock);
+        final int[] fpsLockValues = {0, 30, 40, 45, 60};
+        final String[] fpsLockEntries = {"Unlocked", "30 FPS", "40 FPS", "45 FPS", "60 FPS"};
+        ArrayAdapter<String> fpsLockAdapter = new ArrayAdapter<>(context, android.R.layout.simple_spinner_item, fpsLockEntries);
+        fpsLockAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sFPSLock.setAdapter(fpsLockAdapter);
+        int savedFpsLock = isEditMode() ? container.getFpsLock() : 0;
+        int fpsLockSelection = 0;
+        for (int i = 0; i < fpsLockValues.length; i++) {
+            if (fpsLockValues[i] == savedFpsLock) {
+                fpsLockSelection = i;
+                break;
+            }
+        }
+        sFPSLock.setSelection(fpsLockSelection);
+
         final Spinner sGraphicsDriver = view.findViewById(R.id.SGraphicsDriver);
         
         final Spinner sDXWrapper = view.findViewById(R.id.SDXWrapper);
@@ -626,6 +642,8 @@ public class ContainerDetailFragment extends Fragment {
                 // Capture and set container properties based on UI inputs
                 String name = etName.getText().toString();
                 String screenSize = getScreenSize(view);
+                int fpsLockPosition = sFPSLock.getSelectedItemPosition();
+                int fpsLock = fpsLockValues[Math.max(0, Math.min(fpsLockPosition, fpsLockValues.length - 1))];
                 String envVars = envVarsView.getEnvVars();
                 String graphicsDriver = StringUtils.parseIdentifier(sGraphicsDriver.getSelectedItem());
                 String graphicsDriverConfig = vGraphicsDriverConfig.getTag().toString();
@@ -678,6 +696,7 @@ public class ContainerDetailFragment extends Fragment {
                     // Update existing container properties
                     container.setName(name);
                     container.setScreenSize(screenSize);
+                    container.setFpsLock(fpsLock);
                     container.setEnvVars(envVars);
                     container.setCPUList(cpuList);
                     container.setCPUListWoW64(cpuListWoW64);
@@ -782,6 +801,7 @@ public class ContainerDetailFragment extends Fragment {
                     manager.createContainerAsync(data, contentsManager, (container) -> {
                         if (container != null) {
                             this.container = container;
+                            container.setFpsLock(fpsLock);
                             container.putExtra("fullscreenMode", String.valueOf(fullscreenMode));
                             container.putExtra("screenAlignment", String.valueOf(screenAlignment));
                             container.saveData();

@@ -916,6 +916,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public void onResume() {
         super.onResume();
+        setSustainedPerformanceEnabled(true);
         com.winlator.cmod.core.RefreshRateUtils.onActivityResumed(this);
         if (xServerView != null) xServerView.onResume();
 
@@ -940,6 +941,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onPause() {
+        setSustainedPerformanceEnabled(false);
         super.onPause();
         if (xServerView != null) xServerView.onPause();
 
@@ -953,6 +955,16 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         com.winlator.cmod.perf.PerformanceManager.onGamePause(this);
     }
 
+
+    private void setSustainedPerformanceEnabled(boolean enabled) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
+        try {
+            getWindow().setSustainedPerformanceMode(enabled);
+            Log.i("XServerDisplayActivity", "Sustained performance mode " + (enabled ? "enabled" : "disabled"));
+        } catch (RuntimeException e) {
+            Log.w("XServerDisplayActivity", "Sustained performance mode is unavailable", e);
+        }
+    }
 
     private void savePlaytimeData() {
         long endTime = System.currentTimeMillis();
@@ -1028,6 +1040,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        setSustainedPerformanceEnabled(false);
         steamMessageHandler.removeCallbacksAndMessages(null);
         if (steamMessageReceiver != null) {
             unregisterReceiver(steamMessageReceiver);
@@ -1727,6 +1740,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                     )
             );
         }
+
+        // Apply the FPS cap after container, shortcut and temporary environment overrides.
+        applyContainerFpsLock();
 
         // Pass final envVars to the launcher
         guestProgramLauncherComponent.setEnvVars(envVars);
@@ -2640,6 +2656,57 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public void launchInGameIconPicker() {
         if (inGameIconPickerLauncher != null) {
             inGameIconPickerLauncher.launch("image/*");
+        }
+    }
+
+    /** Applies the per-container FPS cap to DXVK and requests FIFO presentation. */
+    private void applyContainerFpsLock() {
+        int targetFps = container != null ? container.getFpsLock() : 0;
+        if (targetFps <= 0) return;
+
+        envVars.put("MESA_VK_WSI_PRESENT_MODE", "fifo");
+        boolean usingDxvk = dxwrapper != null && dxwrapper.toLowerCase(Locale.ENGLISH).contains("dxvk");
+        if (!usingDxvk) {
+            Log.i("XServerDisplayActivity", "FPS cap selected (" + targetFps
+                    + "), but DXVK is not selected; only FIFO presentation can be requested here.");
+            return;
+        }
+
+        // Retain the legacy variable for older bundled DXVK builds. Modern builds use maxFrameRate config entries.
+        envVars.put("DXVK_FRAME_RATE", targetFps);
+
+        File dxvkConfigFile = new File(getFilesDir(), "imagefs/home/xuser/.config/dxvk.conf");
+        File configDir = dxvkConfigFile.getParentFile();
+        if (configDir != null && !configDir.exists() && !configDir.mkdirs()) {
+            Log.w("XServerDisplayActivity", "Could not create DXVK config directory: " + configDir);
+            return;
+        }
+
+        StringBuilder config = new StringBuilder();
+        if (dxvkConfigFile.isFile()) {
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(dxvkConfigFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    int separator = line.indexOf('=');
+                    String key = separator > 0 ? line.substring(0, separator).trim().toLowerCase(Locale.ENGLISH) : "";
+                    if (key.equals("dxvk.maxframerate") || key.equals("dxgi.maxframerate")
+                            || key.equals("d3d9.maxframerate") || key.equals("dxvk.framerate")) continue;
+                    config.append(line).append('\n');
+                }
+            } catch (java.io.IOException e) {
+                Log.w("XServerDisplayActivity", "Could not read existing DXVK config", e);
+            }
+        }
+
+        config.append("dxvk.maxFrameRate = ").append(targetFps).append('\n');
+        config.append("dxgi.maxFrameRate = ").append(targetFps).append('\n');
+        config.append("d3d9.maxFrameRate = ").append(targetFps).append('\n');
+
+        if (FileUtils.writeString(dxvkConfigFile, config.toString())) {
+            envVars.put("DXVK_CONFIG_FILE", dxvkConfigFile.getAbsolutePath());
+            Log.i("XServerDisplayActivity", "Applied per-container DXVK FPS cap: " + targetFps);
+        } else {
+            Log.w("XServerDisplayActivity", "Failed to write per-container DXVK FPS cap");
         }
     }
 
