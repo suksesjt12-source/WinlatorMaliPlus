@@ -44,6 +44,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 
 public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private String guestExecutable;
@@ -55,6 +58,10 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private String fexcorePreset = FEXCorePreset.INTERMEDIATE;
     private Callback<Integer> terminationCallback;
     private static final Object lock = new Object();
+
+    // Set true temporarily to capture only Box64 native-wrapper selection lines in logcat.
+    // Keep false during normal gameplay to avoid verbose logging overhead.
+    private static final boolean NATIVE_WRAP_AUDIT = false;
     private final ContentsManager contentsManager;
     private final ContentProfile wineProfile;
     private Container container;
@@ -284,6 +291,69 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         return ldPreload;
     }
 
+
+    /**
+     * Android/Bionic libraries use LD_LIBRARY_PATH. BOX64_LD_LIBRARY_PATH is
+     * reserved for guest x86_64 libraries and must not contain ARM64 system paths.
+     */
+    private static String buildNativeLibraryPath(File rootDir, String existing) {
+        LinkedHashSet<String> paths = new LinkedHashSet<>();
+        paths.add(new File(rootDir, "usr/lib/aarch64-linux-android").getAbsolutePath());
+        paths.add(new File(rootDir, "lib/aarch64-linux-android").getAbsolutePath());
+        paths.add("/system/lib64");
+        paths.add("/vendor/lib64");
+        paths.add(new File(rootDir, "usr/lib").getAbsolutePath());
+        addUniquePaths(paths, existing);
+        return String.join(":", paths);
+    }
+
+    private static String buildBox64LibraryPath(File rootDir, String existing) {
+        LinkedHashSet<String> paths = new LinkedHashSet<>();
+        if (existing == null || existing.trim().isEmpty()) {
+            paths.add(new File(rootDir, "usr/lib/x86_64-linux-gnu").getAbsolutePath());
+            paths.add(new File(rootDir, "usr/lib").getAbsolutePath());
+        }
+        addUniquePaths(paths, existing);
+        return String.join(":", paths);
+    }
+
+    private static void addUniquePaths(Set<String> paths, String value) {
+        if (value == null || value.trim().isEmpty()) return;
+        for (String item : value.split(":")) {
+            String path = item.trim();
+            if (!path.isEmpty()) paths.add(path);
+        }
+    }
+
+    /**
+     * Remove explicit force-emulation entries for libraries that Box64 can
+     * resolve through native wrappers when a matching wrapper is available.
+     */
+    private static String sanitizeEmulatedLibs(String value) {
+        if (value == null || value.trim().isEmpty()) return "";
+        Set<String> nativeCandidates = new java.util.HashSet<>(java.util.Arrays.asList(
+                "libvulkan.so", "libvulkan.so.1",
+                "libegl.so", "libegl.so.1",
+                "libglesv2.so", "libglesv2.so.2",
+                "libgl.so", "libgl.so.1",
+                "libm.so", "libm.so.6",
+                "libopenal.so", "libopenal.so.1",
+                "libz.so", "libz.so.1",
+                "libfreetype.so", "libfreetype.so.6",
+                "libsdl2-2.0.so.0"
+        ));
+        LinkedHashSet<String> kept = new LinkedHashSet<>();
+        for (String item : value.split(":")) {
+            String library = item.trim();
+            if (library.isEmpty()) continue;
+            int slash = library.lastIndexOf('/');
+            String basename = (slash >= 0 ? library.substring(slash + 1) : library)
+                    .toLowerCase(Locale.ENGLISH);
+            if (!nativeCandidates.contains(basename)) kept.add(library);
+        }
+        return String.join(":", kept);
+    }
+
     public Callback<Integer> getTerminationCallback() {
         return terminationCallback;
     }
@@ -362,7 +432,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         execEnvVars.put("USER", ImageFs.USER);
         execEnvVars.put("TMPDIR", rootDir.getPath() + "/usr/tmp");
         execEnvVars.put("XDG_DATA_DIRS", rootDir.getPath() + "/usr/share");
-        execEnvVars.put("LD_LIBRARY_PATH", rootDir.getPath() + "/usr/lib" + ":" + "/system/lib64");
+        execEnvVars.put("LD_LIBRARY_PATH", buildNativeLibraryPath(rootDir, this.envVars.get("LD_LIBRARY_PATH")));
         execEnvVars.put("XDG_CONFIG_DIRS", rootDir.getPath() + "/usr/etc/xdg");
         execEnvVars.put("GST_PLUGIN_PATH", rootDir.getPath() + "/usr/lib/gstreamer-1.0");
         execEnvVars.put("FONTCONFIG_PATH", rootDir.getPath() + "/usr/etc/fonts");
@@ -511,6 +581,16 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             execEnvVars.putAll(this.envVars);
         }
 
+        // Reassert native search order after container/shortcut overrides.
+        // Box64's own path is for x86_64 guest libraries, not Android ARM64 libraries.
+        execEnvVars.put("LD_LIBRARY_PATH",
+                buildNativeLibraryPath(rootDir, execEnvVars.get("LD_LIBRARY_PATH")));
+        execEnvVars.put("BOX64_LD_LIBRARY_PATH",
+                buildBox64LibraryPath(rootDir, execEnvVars.get("BOX64_LD_LIBRARY_PATH")));
+        execEnvVars.put("BOX64_EMULATED_LIBS",
+                sanitizeEmulatedLibs(execEnvVars.get("BOX64_EMULATED_LIBS")));
+        Box64PresetManager.applyNativeWrappingDefaults(execEnvVars);
+
         String emulator = container.getEmulator();
         if (shortcut != null)
             emulator = shortcut.getExtra("emulator", container.getEmulator());
@@ -560,7 +640,23 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         updatePrefixBeforeSession(execEnvVars, wineLauncher, rootDir, imageFs);
 
         Log.d("GuestLauncher", "Executing command: " + command);
-        return ProcessHelper.exec(command, execEnvVars.toStringArray(), rootDir, (status) -> {
+
+        final Callback<String> nativeWrapAuditCallback = NATIVE_WRAP_AUDIT
+                ? line -> {
+                    if (line != null && (line.contains("Using native(wrapped)")
+                            || line.contains("Using emulated"))) {
+                        Log.i("NativeWrapAudit", line.trim());
+                    }
+                }
+                : null;
+        if (nativeWrapAuditCallback != null) {
+            execEnvVars.put("BOX64_LOG", "1");
+            ProcessHelper.addDebugCallback(nativeWrapAuditCallback);
+        }
+
+        int launchedPid = ProcessHelper.exec(command, execEnvVars.toStringArray(), rootDir, (status) -> {
+            if (nativeWrapAuditCallback != null)
+                ProcessHelper.removeDebugCallback(nativeWrapAuditCallback);
             synchronized (lock) {
                 pid = -1;
             }
@@ -568,6 +664,9 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             if (terminationCallback != null)
                 terminationCallback.call(status);
         });
+        if (launchedPid <= 0 && nativeWrapAuditCallback != null)
+            ProcessHelper.removeDebugCallback(nativeWrapAuditCallback);
+        return launchedPid;
     }
 
     /**
