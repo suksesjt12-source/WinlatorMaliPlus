@@ -105,6 +105,16 @@ public class ShortcutSettingsDialog extends ContentDialog {
         final EditText etExecArgs = findViewById(R.id.ETExecArgs);
         etExecArgs.setText(shortcut.getExtra("execArgs"));
 
+        final CheckBox cbDirectBoot = new CheckBox(context);
+        cbDirectBoot.setText("Direct Game Boot (No explorer.exe)");
+        cbDirectBoot.setChecked(shortcut.isDirectBootEnabled());
+        ViewGroup generalTab = findViewById(R.id.LLTabGeneral);
+        if (generalTab != null) {
+            generalTab.addView(cbDirectBoot, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
         ContainerDetailFragment containerDetailFragment = new ContainerDetailFragment(shortcut.container.id);
 //        containerDetailFragment.loadScreenSizeSpinner(getContentView(), shortcut.getExtra("screenSize", shortcut.container.getScreenSize()));
 
@@ -529,6 +539,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
                 String execArgs = etExecArgs.getText().toString();
                 shortcut.putExtra("execArgs", !execArgs.isEmpty() ? execArgs : null);
+                shortcut.putExtra("directBoot", cbDirectBoot.isChecked() ? "1" : null);
                 shortcut.putExtra("screenSize", screenSize);
                 shortcut.putExtra("adaptiveFramePacing", cbAdaptiveFramePacing.isChecked() ? "1" : null);
                 String hostRenderer = sHostRenderer.getSelectedItemPosition() == 1
