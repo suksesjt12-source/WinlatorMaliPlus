@@ -1665,7 +1665,19 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             guestProgramLauncherComponent.setContainer(this.container);
             guestProgramLauncherComponent.setWineInfo(this.wineInfo);
 
-            String guestExecutable = "wine explorer /desktop=shell," + xServer.screenInfo + " " + getWineStartCommand();
+            String directGameCommand = shortcut != null && shortcut.isDirectBootEnabled()
+                    ? getDirectGameCommand() : null;
+            String guestExecutable;
+            if (directGameCommand != null) {
+                guestExecutable = directGameCommand;
+                Log.i("XServerDisplayActivity", "Direct Game Boot enabled for " + shortcut.name);
+            } else {
+                guestExecutable = "wine explorer /desktop=shell," + xServer.screenInfo + " " + getWineStartCommand();
+                if (shortcut != null && shortcut.isDirectBootEnabled()) {
+                    Log.w("XServerDisplayActivity",
+                            "Direct Game Boot unavailable for this shortcut; using the standard launcher.");
+                }
+            }
 
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
@@ -3107,6 +3119,50 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             FileUtils.copy(srcFile, dstFile);
         }
    }
+
+    /**
+     * Builds a foreground Wine command for a normal .exe stored inside the container's C: drive.
+     * Unsupported shortcut types and paths deliberately fall back to the regular winhandler path.
+     */
+    @Nullable
+    private String getDirectGameCommand() {
+        if (shortcut == null || container == null || shortcut.path == null
+                || !shortcut.path.toLowerCase(Locale.ROOT).endsWith(".exe")) {
+            return null;
+        }
+
+        try {
+            File executable = new File(shortcut.path).getCanonicalFile();
+            if (!executable.isFile()) return null;
+
+            File driveC = new File(container.getRootDir(), ".wine/drive_c").getCanonicalFile();
+            String driveCPath = driveC.getPath() + File.separator;
+            String executablePath = executable.getPath();
+            if (!executablePath.startsWith(driveCPath)) return null;
+
+            String relativePath = executablePath.substring(driveCPath.length())
+                    .replace(File.separatorChar, '\\\\');
+            String windowsPath = "C:\\\\" + relativePath;
+
+            String execArgs = shortcut.getExtra("execArgs").trim();
+            boolean gtaOpt = "1".equals(shortcut.getExtra("gtaOptimization", "0"))
+                    || "1".equals(container.getExtra("gtaOptimization", "0"));
+            String gtaArgs = " -fullscreen -DX10 -novsync -forcehighpriority -noprecache -noShaderCache"
+                    + " -nopostfx -nomemrestrict -norestrictions -anisotropicQualityLevel 0"
+                    + " -shaderQuality 0 -postFX 0 -reflectionQuality 0 -grassQuality 0"
+                    + " -particleQuality 0 -noInGameDOF -cityDensity 0.2 -lodScale 0.0"
+                    + " -pedLodBias 0.0 -vehicleLodBias 0.0";
+            if (gtaOpt && !execArgs.contains("-nomemrestrict")) {
+                execArgs = (execArgs + gtaArgs).trim();
+            }
+
+            return "wine \"" + windowsPath.replace("\"", "") + "\""
+                    + (execArgs.isEmpty() ? "" : " " + execArgs);
+        } catch (IOException e) {
+            Log.w("XServerDisplayActivity", "Could not resolve direct game executable path.", e);
+            return null;
+        }
+    }
 
     private String getWineStartCommand() {
         // Initialize overrideEnvVars if not already done
