@@ -199,6 +199,21 @@ public abstract class Box64PresetManager {
         return envVars;
     }
 
+    /**
+     * Enforce native-wrapping and touch-safe DynaRec defaults after all preset
+     * and per-container variables have been merged.
+     */
+    public static void applyNativeWrappingDefaults(EnvVars envVars) {
+        if (envVars == null) return;
+        envVars.put("BOX64_PREFER_WRAPPED", "1");
+        envVars.put("BOX64_ALLOWMISSINGLIBS", "1");
+        envVars.put("BOX64_DYNAREC_NATIVEFLAGS", "1");
+        envVars.put("BOX64_DYNAREC_CALLRET", "1");
+        envVars.put("BOX64_DYNAREC_SAFEFLAGS", "1");
+        envVars.put("BOX64_DYNAREC_BIGBLOCK", "2");
+        envVars.put("BOX64_DYNAREC_STRONGMEM", "0");
+    }
+
     public static ArrayList<Box64Preset> getPresets(String prefix, Context context) {
         ArrayList<Box64Preset> presets = new ArrayList<>();
         presets.add(new Box64Preset(Box64Preset.STABILITY, context.getString(R.string.stability)));
